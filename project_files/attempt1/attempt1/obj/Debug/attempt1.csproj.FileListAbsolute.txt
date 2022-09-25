@@ -1,0 +1,8 @@
+C:\Users\PTY\Documents\GitHub\this_is_csharp_ch18_example1\project_files\attempt1\attempt1\bin\Debug\attempt1.exe.config
+C:\Users\PTY\Documents\GitHub\this_is_csharp_ch18_example1\project_files\attempt1\attempt1\bin\Debug\attempt1.exe
+C:\Users\PTY\Documents\GitHub\this_is_csharp_ch18_example1\project_files\attempt1\attempt1\bin\Debug\attempt1.pdb
+C:\Users\PTY\Documents\GitHub\this_is_csharp_ch18_example1\project_files\attempt1\attempt1\obj\Debug\attempt1.csproj.AssemblyReference.cache
+C:\Users\PTY\Documents\GitHub\this_is_csharp_ch18_example1\project_files\attempt1\attempt1\obj\Debug\attempt1.csproj.SuggestedBindingRedirects.cache
+C:\Users\PTY\Documents\GitHub\this_is_csharp_ch18_example1\project_files\attempt1\attempt1\obj\Debug\attempt1.csproj.CoreCompileInputs.cache
+C:\Users\PTY\Documents\GitHub\this_is_csharp_ch18_example1\project_files\attempt1\attempt1\obj\Debug\attempt1.exe
+C:\Users\PTY\Documents\GitHub\this_is_csharp_ch18_example1\project_files\attempt1\attempt1\obj\Debug\attempt1.pdb
