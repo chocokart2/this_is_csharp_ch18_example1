@@ -30,7 +30,7 @@ namespace attempt1
             // 필드 초기화
             pageNum = 0;
             maxPageNum = 0;
-
+            memoList = new List<MemoData>();
             NextCommand = new Queue<CommandCaller>();
             mainSceneCommands = new Dictionary<string, Command>();
             mainSceneCommands.Add("다음", new Command(ShowNextList));
@@ -64,6 +64,7 @@ namespace attempt1
         }
         bool workLoop = true;
         string directoryPath = "memo_files\\";
+        string fileType = ".chokart";
         readonly string commandSigniture = "!";
         ViewMode mode = ViewMode.Main;
         Queue<CommandCaller> NextCommand;
@@ -152,6 +153,11 @@ namespace attempt1
 
 #warning 테스트 하지 않은 함수입니다
         // "!생성 [제목]"
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="parameter"></param>
+        /// <exception cref="CannotMakeAlternativeNameException"></exception>
         void MakeMemo(string parameter)
         {
             // 메모를 만들고, 그 메모를 수정하도록 합니다.
@@ -163,19 +169,58 @@ namespace attempt1
             string Title;
 
 
-            if (parameter != "")
+            if(parameter == "")
             {
-                newMemo = new MemoData(lastId + 1, parameter);
+                Title = "No Title";
             }
             else
             {
-                newMemo = new MemoData(lastId + 1);
+                Title = parameter;
             }
 
+            // 이름을 가지고 파일을 만들어봅니다. 만약 파일이 존재한다면 대체 이름을 만들어 다시 시도합니다.
+            FileInfo fileInfo;
+            int whileAttempt = 0;
+            do
+            {
+                if (whileAttempt > 255)
+                {
+                    throw new CannotMakeAlternativeNameException("다른 이름을 선택하세요");
+                }
+                fileInfo = new FileInfo(string.Format($"{directoryPath}{Title}{fileType}"));
 
+                if(fileInfo.Exists) Title = String.Format($"{Title}_"); // 대체 이름을 만듭니다.
+                whileAttempt++;
+            }
+            while (fileInfo.Exists);
+
+            // 파일 만들기가 준비되었습니다.
+            
+            newMemo = new MemoData(lastId + 1, Title);
+            FileStream makeStream = new FileStream(string.Format($"{directoryPath}{Title}{fileType}"), FileMode.CreateNew); // 파일이 이미 있다고 예외를 내뿜습니다.
+
+            makeStream.Close();
+
+            if(fileInfo.Exists == true)
+            {
+                Console.WriteLine($"파일이 성공적으로 만들어졌습니다. 파일 이름 : {Title}");
+            }
+
+            
 
             // 메모를 열어봅니다
             NextCommand.Enqueue(new CommandCaller(OpenMemo, parameter));
+        }
+        public class CannotMakeAlternativeNameException : Exception
+        {
+            public CannotMakeAlternativeNameException() : base()
+            {
+
+            }
+            public CannotMakeAlternativeNameException(string _message) : base(_message)
+            {
+
+            }
         }
 
 #warning 로직 구현 중입니다.
