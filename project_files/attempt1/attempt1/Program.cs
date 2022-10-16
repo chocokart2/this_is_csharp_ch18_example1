@@ -2,9 +2,19 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Formatters.Binary;
+using System.Security;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+
+// TODO
+// 라인 수정하는 함수 만들기
+// 임시 파일 로직 구현
+// >> 어떻게 진짜 파일과 임시 파일을 구분할 것인가
+// >> 어떻게 임시 파일을 진짜 파일에 뒤집어쓸 것인가
+
 
 namespace attempt1
 {
@@ -34,9 +44,15 @@ namespace attempt1
             NextCommand = new Queue<CommandCaller>();
             mainSceneCommands = new Dictionary<string, Command>();
             mainSceneCommands.Add("다음", new Command(ShowNextList));
+            mainSceneCommands.Add("열기", new Command(OpenMemo));
             mainSceneCommands.Add("응답", new Command(RespondCommand));
             mainSceneCommands.Add("생성", new Command(MakeMemo));
+            mainSceneCommands.Add("페이지", new Command(ShowPageList));
             noteSceneCommands = new Dictionary<string, Command>();
+            noteSceneCommands.Add("뒤로", new Command(GoBackToMenu));
+            noteSceneCommands.Add("메뉴", new Command(GoBackToMenu));
+            noteSceneCommands.Add("메인", new Command(GoBackToMenu));
+            //noteSceneCommands.Add("!")
             
 
 
@@ -63,9 +79,11 @@ namespace attempt1
             }
         }
         bool workLoop = true;
-        string directoryPath = "memo_files\\";
-        string fileType = ".chokart";
+        string currentOpenedFileName; // 확장자 포함한 이름입니다.
         readonly string commandSigniture = "!";
+        readonly string directoryPath = "memo_files\\";
+        readonly string fileType = ".chokart"; // 확장자 파일입니다.
+        readonly string fileTypeTemp = ".chotemp"; // 확장자 파일입니다.
         ViewMode mode = ViewMode.Main;
         Queue<CommandCaller> NextCommand;
         //List<CommandCaller> NextCommand; // 함수 괄호를 빠져나오고 실행할 함수입니다. 불필요한 함수 호출 스택 채우기를 하지 않도록 하기 위합입니다.
@@ -76,9 +94,9 @@ namespace attempt1
 
 
         // 프로퍼티
-
+        
         // 함수
-//public:
+        //public:
         public void UpdateFileList()
         {
             // 함수 설명
@@ -99,13 +117,62 @@ namespace attempt1
                 directoryInfo.Create();
             }
             // 해당 폴더의 .chokart 이진 파일들 죄다 찾아 저장함.
-            // 그 이후 파일명 죄다 저장한다.
-            FileInfo[] fileInfos = directoryInfo.GetFiles();
             
+            // 그 이후 파일명을 배열애 죄다 저장한다. -> 스트림에 저장하여 파일에 접근할 수 있습니다.
+            FileInfo[] fileInfos = directoryInfo.GetFiles(); // fileInfo.Name을 이용하여 파일에 접근하기
+
+            FileStream openerStream;
+            for (int index = 0; index < fileInfos.Length; index++)
+            {
+                openerStream = new FileStream($"{directoryPath}{fileInfos[index].Name}", FileMode.Open);
+
+                BinaryFormatter deserializer = new BinaryFormatter();
+
+
+                try
+                {
+                    MemoData recevedObject
+                        = (MemoData)deserializer.Deserialize(openerStream);
+                    memoList.Add(recevedObject);
+                }
+                catch (ArgumentNullException ex)
+                {
+                    Console.WriteLine(ex);
+                    Cry("오프너 스트림이 널 값이에요.");
+                }
+                catch(SerializationException ex)
+                {
+                    Console.WriteLine(ex);
+                    Cry("직렬화하는데 문제가 생겼어요.");
+                }
+                catch(SecurityException ex)
+                {
+                    Console.WriteLine(ex);
+                    Cry("보안 오류가 감지되었어요.");
+                }
+
+
+
+                openerStream.Close();
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+            // 파일의 내용들을 객체에 넣습니다.
+
 
             //directoryInfo.GetFiles()
 
-            
+
         }
         public void Work()
         {
@@ -116,8 +183,9 @@ namespace attempt1
 
             // 초기 파트
 
+            ShowPageList("0");
 
-            for(; ; )
+            for (; ; )
             {
                 if (workLoop == false) break;
 
@@ -145,6 +213,7 @@ namespace attempt1
         }
         //private:
 
+        #region ViewMode.Main 용 함수
         // "!응답"
         void RespondCommand(string parameter)
         {
@@ -198,7 +267,9 @@ namespace attempt1
             
             newMemo = new MemoData(lastId + 1, Title);
             FileStream makeStream = new FileStream(string.Format($"{directoryPath}{Title}{fileType}"), FileMode.CreateNew); // 파일이 이미 있다고 예외를 내뿜습니다.
+            BinaryFormatter serializer = new BinaryFormatter();
 
+            serializer.Serialize(makeStream, newMemo);
             makeStream.Close();
 
             if(fileInfo.Exists == true)
@@ -224,49 +295,84 @@ namespace attempt1
         }
 
 #warning 로직 구현 중입니다.
-        // "!열기 [제목]"
         void OpenMemo(string parameter)
         {
-            // 함수 설명
+            // >>함수 설명
             // 문서의 내용을 보여줍니다.
+            // 입력 값 A : 이름 값
+            // 입력 겂 B : 인덱스 값
+            // 출력 값 A / B : 파일 출력
 
-            // 지역 변수
+            // >> 지역 변수 준비
             int ShowLineSize = 20; // 한번에 보여줄 라인입니다.
-
-            
-
-            mode = ViewMode.Edit;
+            int index; // 인덱스 값으로 아규먼트가 들어온 경우.
+            FileStream fileStream;
 
 
-        }
+            // >> 입력받은 값을 기반으로 파일 특정하기
+            try
+            {
+                fileStream = new FileStream($"{directoryPath}{parameter}{fileType}", FileMode.Open);
+                BinaryFormatter formatter = new BinaryFormatter();
+                MemoData recvMemo = (MemoData)formatter.Deserialize(fileStream);
+                
+                for(int memoLine = 0; memoLine < recvMemo.content.Count; memoLine++)
+                {
+                    Console.WriteLine(recvMemo.content[memoLine]);
+                }
 
+
+                fileStream.Close();
+                // >> 상태 변경
+                this.mode = ViewMode.Edit;
+                currentOpenedFileName = $"{parameter}{fileType}";
+            }
+            catch(FileNotFoundException)
+            {
+                if (parameter.EndsWith(fileType))
+                {
+                    Cry($"파일 이름에 확장자 {fileType}을 제거하고 입력해주세요.");
+                }
+                else
+                {
+                    Cry("입력한 파일이 존재하지 않아요");
+                }
+            }
+
+
+
+
+        }// "!열기 [제목]"
 #warning 테스트 하지 않은 함수입니다
-        // "!페이지"
         void ShowPageList(string parameter)
         {
-            // 비주얼 용으로 사용된 필드.
+            // 프론트 엔드용 변수
             int countPerPage = 10; // 한 페이지에 보여질 메모의 갯수
             int edgeBuffer = 3; // 가장 양 끝 페이지 포함 몇 페이지까지 보여주게 할 것인가
             int cursorBuffer = 5; // 현재 선택한 페이지(제외)의 앞 뒤로 몇 페이지까지 보여주게 할 것인가
 
-
-
+            // 현재 페이지가 몇 페이지인가를 결정합니다.
             if (parameter == "")
             {
-
+                pageNum = 0;
             }
-
-            pageNum = int.Parse(parameter);
-
+            else
+            {
+#warning int.parse에서 예외 발생 가능,
+                pageNum = int.Parse(parameter) - 1;
+                if (pageNum < 0) pageNum = 0;
+            }
+            
+            // 현재 목록의 페이지를 보여줍니다.
             Console.WriteLine("메모 목록");
             Console.WriteLine();
-            Console.WriteLine("인덱스\t/제목");
+            Console.WriteLine("인덱스\t| 제목");
             for (
                 int index = countPerPage * pageNum;
                 (index < countPerPage * (pageNum + 1)) && (index < memoList.Count);
                 index++)
             {
-                Console.WriteLine($"{index}\t/ {memoList[index].title}");
+                Console.WriteLine($"{index}\t| {memoList[index].title}");
             }
             Console.WriteLine();
             
@@ -302,9 +408,8 @@ namespace attempt1
 
 
 
-        }
+        }// "!페이지"
 #warning 테스트 하지 않은 함수입니다
-        // "!다음"
         void ShowNextList(string parameter)
         {
             // 함수 설명
@@ -348,13 +453,40 @@ namespace attempt1
 
             NextCommand.Enqueue(new CommandCaller(ShowPageList, pageNum.ToString()));
             // 다음 함수 사이에는 명령문 듣는 상태가 아닙니다.
-        }
+        }// "!다음"
 #warning 테스트 하지 않은 함수입니다
-        // "!이전"
         void ShowPervList(string parameter)
         {
 
+        }// "!이전"
+        #endregion
+        // 노트 커멘드
+        #region ViewMode.Edit용 함수
+
+        void GoBackToMenu(string parameter)
+        {
+            currentOpenedFileName = "";
+            mode = ViewMode.Main;
+            NextCommand.Enqueue(new CommandCaller(ShowPageList));
+        }// "!뒤로 !메뉴 !메인"
+        /// <summary>
+        /// 이 함수는 noteSceneCommands에 Value로 넣을 수 없는 함수입니다. 만약 그러길 원한다면 함수륾 만드세요.
+        /// </summary>
+        /// <param name="line"></param>
+        /// <param name="parameter"></param>
+        void WriteMemoLine(int line, string parameter)
+        {
+            FileStream fileStream = new FileStream($"{directoryPath}{currentOpenedFileName}", FileMode.Open);
+            BinaryFormatter binaryFormatter;
+            MemoData memoData = new MemoData();
+            
+            
+
         }
+
+
+        #endregion
+
 
         // 근데 이게 필요한지 명확하지 않음.
         public void ReceveCommand(string commandLine)
@@ -398,14 +530,29 @@ namespace attempt1
                     }
                     break;
                 case ViewMode.Edit:
-                    try
+                    // !<라인> <문자> 형식인 경우 이를 예외로 한다.
+                    int memoLine = 0;
+                    if(int.TryParse(command, out memoLine))
                     {
-                        noteSceneCommands[command](argument);
+                        // 라인
+                        WriteMemoLine(memoLine, argument);
+
                     }
-                    catch (KeyNotFoundException)
+                    else
                     {
-                        Cry("알 수 없는 명령어예요.");
+                        // 단순 명령 상태입니다.
+                        try
+                        {
+                            noteSceneCommands[command](argument);
+                        }
+                        catch (KeyNotFoundException)
+                        {
+                            Cry("알 수 없는 명령어예요.");
+                        }
                     }
+
+
+
                     break;
                 default:
                     Cry("알 수 없는 ViewMode가 설정되었습니다.");
@@ -413,10 +560,23 @@ namespace attempt1
                     Kill();
                     break;
             }
+            for(int trycount = 0; trycount < 256; trycount++)
+            {
 
-
-
-
+                if(NextCommand.Count <= 0)
+                {
+                    // 대기중인 명령이 다 끝났습니다.
+                    break;
+                }
+                else
+                {
+                    NextCommand.Dequeue().Run();
+                }
+                if(trycount == 255 && NextCommand.Count > 0)
+                {
+                    Cry("NextCommand에 존재하는 명령어가 제거되지 않습니다!");
+                }
+            }
         }
 
         #region 심연의 코드
@@ -427,6 +587,7 @@ namespace attempt1
         #endregion
 
         // 열거형
+        #region MyRegion
         enum ViewMode // 현재 플레이어가 보고 있는 씬의 이름을 나타냅니다.
         {
             Main    = 0,
@@ -437,6 +598,8 @@ namespace attempt1
             User    = 0,
             Dev     = 1
         }
+        #endregion
+
 
     }
 
@@ -484,15 +647,26 @@ namespace attempt1
 
         // 생성자
         public CommandCaller() { }
-        public CommandCaller(Command command, params string[] strings) : this()
+        public CommandCaller(Command command) : this()
         {
             deleg = command;
-            arguments = strings;
+            argument = "";
+        }
+        public CommandCaller(Command command, string recvArgument) : this(command)
+        {
+            deleg = command;
+            argument = recvArgument;
         }
 
         // 필드
         public Command deleg;
-        public string[] arguments;
+        public string argument;
+
+        // 함수
+        public void Run()
+        {
+            deleg(argument);
+        }
     }
 
 
