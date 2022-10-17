@@ -52,7 +52,7 @@ namespace attempt1
             noteSceneCommands.Add("뒤로", new Command(GoBackToMenu));
             noteSceneCommands.Add("메뉴", new Command(GoBackToMenu));
             noteSceneCommands.Add("메인", new Command(GoBackToMenu));
-            //noteSceneCommands.Add("!")
+            //noteSceneCommands.Add("!", new Command(WriteMemoNewLine));
             
 
 
@@ -61,9 +61,10 @@ namespace attempt1
         }
         // 필드
 //public:
-        public List<MemoData> memoList;
-        public string[] fileNameList;
 //private:
+        List<MemoData> memoList;
+        string[] fileNameList;        
+
         int pageNum; // 0부터 시작하는 페이지 번호입니다.
         int maxPageNum;
         int lastId // 새로운 메모에 아이디를 부여할 때 사용합니다.
@@ -79,11 +80,13 @@ namespace attempt1
             }
         }
         bool workLoop = true;
+        bool hasMemoEdited = false; // 만약 객체 수정이 이루어졌다고 생각되면 true로 바뀝니다.
         string currentOpenedFileName; // 확장자 포함한 이름입니다.
         readonly string commandSigniture = "!";
         readonly string directoryPath = "memo_files\\";
         readonly string fileType = ".chokart"; // 확장자 파일입니다.
         readonly string fileTypeTemp = ".chotemp"; // 확장자 파일입니다.
+        MemoData currentOpenedMemoObject;
         ViewMode mode = ViewMode.Main;
         Queue<CommandCaller> NextCommand;
         //List<CommandCaller> NextCommand; // 함수 괄호를 빠져나오고 실행할 함수입니다. 불필요한 함수 호출 스택 채우기를 하지 않도록 하기 위합입니다.
@@ -122,7 +125,8 @@ namespace attempt1
             FileInfo[] fileInfos = directoryInfo.GetFiles(); // fileInfo.Name을 이용하여 파일에 접근하기
 
             FileStream openerStream;
-            for (int index = 0; index < fileInfos.Length; index++)
+            memoList = new List<MemoData>();
+            for (int index = 0; index < fileInfos.Length; index++) // 받은 파일 목록을 전부 조사한다.
             {
                 openerStream = new FileStream($"{directoryPath}{fileInfos[index].Name}", FileMode.Open);
 
@@ -158,7 +162,10 @@ namespace attempt1
 
 
 
-
+            foreach(MemoData md in memoList)
+            {
+                Console.WriteLine("에 " + md.title);
+            }
 
 
 
@@ -247,6 +254,12 @@ namespace attempt1
                 Title = parameter;
             }
 
+
+
+
+
+
+
             // 이름을 가지고 파일을 만들어봅니다. 만약 파일이 존재한다면 대체 이름을 만들어 다시 시도합니다.
             FileInfo fileInfo;
             int whileAttempt = 0;
@@ -270,17 +283,22 @@ namespace attempt1
             BinaryFormatter serializer = new BinaryFormatter();
 
             serializer.Serialize(makeStream, newMemo);
-            makeStream.Close();
-
+            fileInfo.Refresh();
             if(fileInfo.Exists == true)
             {
                 Console.WriteLine($"파일이 성공적으로 만들어졌습니다. 파일 이름 : {Title}");
             }
 
-            
+
+
+            makeStream.Close();
+
+
+
+            UpdateFileList();
 
             // 메모를 열어봅니다
-            NextCommand.Enqueue(new CommandCaller(OpenMemo, parameter));
+            NextCommand.Enqueue(new CommandCaller(OpenMemo, Title));
         }
         public class CannotMakeAlternativeNameException : Exception
         {
@@ -307,6 +325,7 @@ namespace attempt1
             int ShowLineSize = 20; // 한번에 보여줄 라인입니다.
             int index; // 인덱스 값으로 아규먼트가 들어온 경우.
             FileStream fileStream;
+            hasMemoEdited = false;
 
 
             // >> 입력받은 값을 기반으로 파일 특정하기
@@ -315,23 +334,21 @@ namespace attempt1
                 fileStream = new FileStream($"{directoryPath}{parameter}{fileType}", FileMode.Open);
                 BinaryFormatter formatter = new BinaryFormatter();
                 MemoData recvMemo = (MemoData)formatter.Deserialize(fileStream);
-                
-                for(int memoLine = 0; memoLine < recvMemo.content.Count; memoLine++)
-                {
-                    Console.WriteLine(recvMemo.content[memoLine]);
-                }
 
+                currentOpenedFileName = $"{parameter}{fileType}";
+                currentOpenedMemoObject = recvMemo;
 
                 fileStream.Close();
                 // >> 상태 변경
                 this.mode = ViewMode.Edit;
-                currentOpenedFileName = $"{parameter}{fileType}";
+
+                NextCommand.Enqueue(new CommandCaller(ShowCurrentMemoObjectContent));
             }
             catch(FileNotFoundException)
             {
                 if (parameter.EndsWith(fileType))
                 {
-                    Cry($"파일 이름에 확장자 {fileType}을 제거하고 입력해주세요.");
+                    Cry($"입력한 파일이 존재하지 않아요, 파일 이름에 확장자 {fileType}을 제거하고 입력해보세요.");
                 }
                 else
                 {
@@ -476,14 +493,54 @@ namespace attempt1
         /// <param name="parameter"></param>
         void WriteMemoLine(int line, string parameter)
         {
-            FileStream fileStream = new FileStream($"{directoryPath}{currentOpenedFileName}", FileMode.Open);
-            BinaryFormatter binaryFormatter;
-            MemoData memoData = new MemoData();
-            
-            
+            hasMemoEdited = true;
+            try
+            {
+                currentOpenedMemoObject.content[line] = parameter;
+                NextCommand.Enqueue(new CommandCaller(ShowCurrentMemoObjectContent));
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                if(line >= 0)
+                {
+                    WriteMemoNewLine(parameter);
+                }
+                else
+                {
+                    Cry("라인 값은 음수가 될 수 없어요.");
+                }
+            }
+
+
 
         }
+        void WriteMemoNewLine(string parameter)
+        {
+            hasMemoEdited = true;
+            currentOpenedMemoObject.content.Add(parameter);
+            NextCommand.Enqueue(new CommandCaller(ShowCurrentMemoObjectContent));
+        }
 
+
+
+        void ShowCurrentMemoObjectContent(string parameter)
+        {
+            // >> 함수 설명
+            // 입력값 : 아무래도 상관 없어
+            // 출력값 : 현재 메모의 내용을 콘솔로 출력한다.
+
+            Console.WriteLine($"제목\t| {currentOpenedFileName}");
+            Console.WriteLine($"라인\t| 내용");
+
+            for (int memoLine = 0; memoLine < currentOpenedMemoObject.content.Count; memoLine++)
+            {
+                Console.WriteLine($"{memoLine}\t| {currentOpenedMemoObject.content[memoLine]}");
+            }
+            if(currentOpenedMemoObject.content.Count == 0)
+            {
+                Console.WriteLine("\t| === 내용 없음 ===");
+            }
+        }
 
         #endregion
 
@@ -537,6 +594,10 @@ namespace attempt1
                         // 라인
                         WriteMemoLine(memoLine, argument);
 
+                    }
+                    else if (commandLine.StartsWith(commandSigniture))
+                    {
+                        WriteMemoNewLine(commandLine.Remove(0, commandSigniture.Length));
                     }
                     else
                     {
