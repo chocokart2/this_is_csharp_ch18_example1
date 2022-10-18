@@ -52,6 +52,8 @@ namespace attempt1
             noteSceneCommands.Add("뒤로", new Command(GoBackToMenu));
             noteSceneCommands.Add("메뉴", new Command(GoBackToMenu));
             noteSceneCommands.Add("메인", new Command(GoBackToMenu));
+            noteSceneCommands.Add("저장", new Command(SaveMemoToFile));
+            noteSceneCommands.Add("제목", new Command(ChangeMemoTitle));
             //noteSceneCommands.Add("!", new Command(WriteMemoNewLine));
             
 
@@ -159,27 +161,6 @@ namespace attempt1
 
                 openerStream.Close();
             }
-
-
-
-            foreach(MemoData md in memoList)
-            {
-                Console.WriteLine("에 " + md.title);
-            }
-
-
-
-
-
-
-
-
-            // 파일의 내용들을 객체에 넣습니다.
-
-
-            //directoryInfo.GetFiles()
-
-
         }
         public void Work()
         {
@@ -283,6 +264,7 @@ namespace attempt1
             BinaryFormatter serializer = new BinaryFormatter();
 
             serializer.Serialize(makeStream, newMemo);
+            // 파일 체크
             fileInfo.Refresh();
             if(fileInfo.Exists == true)
             {
@@ -327,7 +309,11 @@ namespace attempt1
             FileStream fileStream;
             hasMemoEdited = false;
 
-
+            // >> 예외 처리하기
+            while (parameter.EndsWith("\\"))
+            {
+                parameter = parameter.Remove(parameter.Length - 1, 1);
+            }
             // >> 입력받은 값을 기반으로 파일 특정하기
             try
             {
@@ -514,6 +500,93 @@ namespace attempt1
 
 
         }
+        void ChangeMemoTitle(string parameter)
+        {
+            hasMemoEdited = true;
+
+            currentOpenedMemoObject.title = parameter;
+
+            NextCommand.Enqueue(new CommandCaller(ShowCurrentMemoObjectContent));
+
+        } // !제목
+#warning 만약 파일 이름에 넣을 수 없는 문자가 들어가는경우 이를 필터해야 합니다
+        void SaveMemoToFile(string parameter)
+        {
+            // 함수 설명
+            // 현재 선택 중인 함수의 객체를 파일에 저장합니다
+            // 만약 입력값이 있다면 해당 입력값으로 제목을 지정해 파일을 찾거나 새로 만들어 저장합니다.
+
+            // 준비!
+            string targetPath;
+            string targetTitle;
+            if (currentOpenedFileName == null ||
+                currentOpenedMemoObject == null)
+            {
+                Cry("현재 수정중인 메모 객체가 존재하지 않습니다.");
+            }
+
+
+            // >> 어느 파일에 저장할 것인가? // 어떤 파일의 이름으로 저장될 것인가?
+            // 만약 아무 입력이 없다면 지금 조작중인 객체를 저장합니다.
+            if(parameter == "") // 새로운 제목으로 저장하지 않음
+            {
+                targetPath = $"{directoryPath}{currentOpenedFileName}";
+
+                FileInfo fileInfo = new FileInfo(targetPath);
+
+
+                // 제목을 바꾼 흔적이 있는지 조사
+                if (currentOpenedFileName != currentOpenedMemoObject.title)
+                {
+#warning 근데 여기 브라켓 안에 targetPath에 할당된 값은 브라켓 바깥으로 나가면 휘발될까요?
+                    targetPath = $"{directoryPath}{currentOpenedMemoObject.title}{fileType}";
+
+                    // 제목을 바꿨으므로 MoveTo 함수를 호출합니다.
+                    // 주소를 옮겼으므로 옮긴 주소로 타게팅을 다르게 합니다.
+                    fileInfo.MoveTo(targetPath);
+                    fileInfo = new FileInfo(targetPath);
+                }
+
+                FileStream fs = new FileStream(targetPath, FileMode.Open);
+                BinaryFormatter serializer = new BinaryFormatter();
+                serializer.Serialize(fs, currentOpenedMemoObject);
+                currentOpenedFileName = $"{currentOpenedMemoObject.title}{fileType}";
+
+                fs.Close();
+            }
+            else
+            {
+                targetPath = $"{directoryPath}{parameter}{fileType}";
+                FileStream fs = new FileStream(targetPath, FileMode.Create);
+                BinaryFormatter serializer = new BinaryFormatter();
+
+
+                currentOpenedMemoObject.title = parameter;
+                serializer.Serialize(fs, currentOpenedMemoObject);
+
+                fs.Close();
+            }
+
+
+
+            if(new FileInfo($"{directoryPath}{currentOpenedFileName}").Exists)
+            {
+                FileStream saveStream = new FileStream($"{directoryPath}{currentOpenedFileName}", FileMode.Open);
+
+                saveStream.Close();
+            }
+
+
+            // 만약 currentOpenedFileName과 currentOpenedMemoObject.title의 내용이 다르다면
+            hasMemoEdited = false;
+            UpdateFileList();
+            NextCommand.Enqueue(new CommandCaller(ShowCurrentMemoObjectContent));
+        }
+        void SaveMemoWithNewName()
+        {
+            // >> 함수 설명
+        }
+
         void WriteMemoNewLine(string parameter)
         {
             hasMemoEdited = true;
@@ -529,7 +602,9 @@ namespace attempt1
             // 입력값 : 아무래도 상관 없어
             // 출력값 : 현재 메모의 내용을 콘솔로 출력한다.
 
-            Console.WriteLine($"제목\t| {currentOpenedFileName}");
+            Console.Write($"제목\t| {currentOpenedMemoObject.title}");
+            if (hasMemoEdited) Console.Write("(수정됨)");
+            Console.WriteLine();
             Console.WriteLine($"라인\t| 내용");
 
             for (int memoLine = 0; memoLine < currentOpenedMemoObject.content.Count; memoLine++)
