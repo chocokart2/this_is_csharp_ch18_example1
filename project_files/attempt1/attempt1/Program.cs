@@ -46,7 +46,9 @@ namespace attempt1
             mainSceneCommands.Add("다음", new Command(ShowNextList));
             mainSceneCommands.Add("열기", new Command(OpenMemo));
             mainSceneCommands.Add("응답", new Command(RespondCommand));
+            mainSceneCommands.Add("삭제", new Command(DeleteMemo));
             mainSceneCommands.Add("생성", new Command(MakeMemo));
+            mainSceneCommands.Add("지우기", new Command(DeleteMemo));
             mainSceneCommands.Add("페이지", new Command(ShowPageList));
             noteSceneCommands = new Dictionary<string, Command>();
             noteSceneCommands.Add("뒤로", new Command(GoBackToMenu));
@@ -55,9 +57,9 @@ namespace attempt1
             noteSceneCommands.Add("저장", new Command(SaveMemoToFile));
             noteSceneCommands.Add("제목", new Command(ChangeMemoTitle));
             //noteSceneCommands.Add("!", new Command(WriteMemoNewLine));
+
+
             
-
-
             // 마무리 코드
             UpdateFileList();
         }
@@ -177,6 +179,8 @@ namespace attempt1
             {
                 if (workLoop == false) break;
 
+
+                Console.Write("명령어 입력>");
                 recevedString = Console.ReadLine();
                 if(recevedString != "나가기")
                 {
@@ -293,7 +297,6 @@ namespace attempt1
 
             }
         }
-
 #warning 로직 구현 중입니다.
         void OpenMemo(string parameter)
         {
@@ -350,7 +353,8 @@ namespace attempt1
         void ShowPageList(string parameter)
         {
             // 프론트 엔드용 변수
-            int countPerPage = 10; // 한 페이지에 보여질 메모의 갯수
+            //int countPerPage = 10; // 한 페이지에 보여질 메모의 갯수
+            int countPerPage = 3; // 한 페이지에 보여질 메모의 갯수
             int edgeBuffer = 3; // 가장 양 끝 페이지 포함 몇 페이지까지 보여주게 할 것인가
             int cursorBuffer = 5; // 현재 선택한 페이지(제외)의 앞 뒤로 몇 페이지까지 보여주게 할 것인가
 
@@ -361,9 +365,22 @@ namespace attempt1
             }
             else
             {
-#warning int.parse에서 예외 발생 가능,
-                pageNum = int.Parse(parameter) - 1;
-                if (pageNum < 0) pageNum = 0;
+                try
+                {
+                    pageNum = int.Parse(parameter) - 1;
+                    if (pageNum < 0) pageNum = 0;
+                }
+                catch (FormatException ex)
+                {
+                    Cry("숫자를 입력해주세요");
+                    return;
+                }
+                catch (OverflowException ex)
+                {
+                    Cry("입력한 숫자가 너무 커요");
+                    return;
+                }
+
             }
             
             // 현재 목록의 페이지를 보여줍니다.
@@ -462,6 +479,39 @@ namespace attempt1
         {
 
         }// "!이전"
+#warning 로직 구현 중입니다.
+        void DeleteMemo(string parameter)
+        {
+            // 함수 설명
+            // 이 파일을 삭제합니다
+            FileInfo fileInfo = new FileInfo($"{directoryPath}{parameter}{fileType}");
+            if (fileInfo.Exists)
+            {
+                try
+                {
+                    fileInfo.Delete();
+                    fileInfo.Refresh();
+                    if (fileInfo.Exists == false)
+                    {
+                        Console.WriteLine("파일이 성공적으로 삭제되었습니다");
+                    }
+                    else
+                    {
+                        Cry("삭제 실패!");
+                    }
+                }
+                catch (Exception e)
+                {
+                    Cry(e.Message);
+                }
+            }
+            else
+            {
+                Console.WriteLine("파일이 존재하지 않아 아무것도 하지 않았어요.");
+            }
+            UpdateFileList();
+            NextCommand.Enqueue(new CommandCaller(ShowPageList));
+        }// "!지우기 !삭제"
         #endregion
         // 노트 커멘드
         #region ViewMode.Edit용 함수
@@ -556,10 +606,16 @@ namespace attempt1
             }
             else
             {
+                if (!IsThatNameOkay(parameter))
+                {
+                    Cry("올바르지 않은 파일의 이름이예요.");
+                    NextCommand.Enqueue(new CommandCaller(ShowCurrentMemoObjectContent));
+                    return;
+                }
+
                 targetPath = $"{directoryPath}{parameter}{fileType}";
                 FileStream fs = new FileStream(targetPath, FileMode.Create);
                 BinaryFormatter serializer = new BinaryFormatter();
-
 
                 currentOpenedMemoObject.title = parameter;
                 serializer.Serialize(fs, currentOpenedMemoObject);
@@ -593,7 +649,19 @@ namespace attempt1
             currentOpenedMemoObject.content.Add(parameter);
             NextCommand.Enqueue(new CommandCaller(ShowCurrentMemoObjectContent));
         }
-
+        bool IsThatNameOkay(string parameter)
+        {
+            return
+                !(parameter.Contains("/") ||
+                parameter.Contains("\\") ||
+                parameter.Contains(":") ||
+                parameter.Contains("*") ||
+                parameter.Contains("?") ||
+                parameter.Contains("\"") ||
+                parameter.Contains("<") ||
+                parameter.Contains(">") ||
+                parameter.Contains("|"));
+        }
 
 
         void ShowCurrentMemoObjectContent(string parameter)
@@ -601,7 +669,9 @@ namespace attempt1
             // >> 함수 설명
             // 입력값 : 아무래도 상관 없어
             // 출력값 : 현재 메모의 내용을 콘솔로 출력한다.
-
+            Console.WriteLine();
+            Console.WriteLine("파일 내용");
+            Console.WriteLine();
             Console.Write($"제목\t| {currentOpenedMemoObject.title}");
             if (hasMemoEdited) Console.Write("(수정됨)");
             Console.WriteLine();
@@ -646,8 +716,6 @@ namespace attempt1
             string command = stringIndex != -1  ? commandLine.Remove(stringIndex)       : commandLine;
             string argument = stringIndex != -1 ? commandLine.Remove(0, stringIndex+1)    : "";
 
-            Console.WriteLine(command);
-            Console.WriteLine(argument);
             // 받은 스트링에 기반하여 명령어를 실행한다. 현재 씬 상태도 고려해야 한다.
             switch (mode)
             {
@@ -720,6 +788,18 @@ namespace attempt1
         {
             Console.WriteLine($"ERROR_{caller} at line {line}\t: {message}");
         }
+        #endregion
+        #region 마리아나 해구 급으로 숨겨진 테스트용 함수
+        void MakeDummyFiles()
+        {
+            for(int count = 0; count < 30; count++)
+            {
+                MakeMemo($"임의의_파일_{count.ToString()}");
+            }
+
+        }
+
+
         #endregion
 
         // 열거형
