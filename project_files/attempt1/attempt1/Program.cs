@@ -46,6 +46,7 @@ namespace attempt1
             mainSceneCommands.Add("다음", new Command(ShowNextList));
             mainSceneCommands.Add("열기", new Command(OpenMemo));
             mainSceneCommands.Add("응답", new Command(RespondCommand));
+            mainSceneCommands.Add("이전", new Command(ShowPreviousList));
             mainSceneCommands.Add("삭제", new Command(DeleteMemo));
             mainSceneCommands.Add("생성", new Command(MakeMemo));
             mainSceneCommands.Add("지우기", new Command(DeleteMemo));
@@ -71,6 +72,7 @@ namespace attempt1
 
         int pageNum; // 0부터 시작하는 페이지 번호입니다.
         int maxPageNum;
+        int countPerPage = 3; // 한 페이지에 보여질 메모의 갯수
         int lastId // 새로운 메모에 아이디를 부여할 때 사용합니다.
         {
             get
@@ -163,6 +165,8 @@ namespace attempt1
 
                 openerStream.Close();
             }
+
+            maxPageNum = memoList.Count % countPerPage == 0 ? memoList.Count / countPerPage : memoList.Count / countPerPage + 1;
         }
         public void Work()
         {
@@ -352,9 +356,11 @@ namespace attempt1
 #warning 테스트 하지 않은 함수입니다
         void ShowPageList(string parameter)
         {
+            // + 폴더 정렬은 업데이트에서 합니다. 여기서는 보여주기만 해요.
             // 프론트 엔드용 변수
             //int countPerPage = 10; // 한 페이지에 보여질 메모의 갯수
-            int countPerPage = 3; // 한 페이지에 보여질 메모의 갯수
+            int startNum = 1;
+
             int edgeBuffer = 3; // 가장 양 끝 페이지 포함 몇 페이지까지 보여주게 할 것인가
             int cursorBuffer = 5; // 현재 선택한 페이지(제외)의 앞 뒤로 몇 페이지까지 보여주게 할 것인가
 
@@ -369,6 +375,7 @@ namespace attempt1
                 {
                     pageNum = int.Parse(parameter) - 1;
                     if (pageNum < 0) pageNum = 0;
+                    if (pageNum >= maxPageNum) pageNum = maxPageNum - 1;
                 }
                 catch (FormatException ex)
                 {
@@ -395,31 +402,57 @@ namespace attempt1
                 Console.WriteLine($"{index}\t| {memoList[index].title}");
             }
             Console.WriteLine();
-            
+
+            // 1 2 3 ... n-5 n-4 n-3 n-2 n-1 [n] n+1 n+2 n+3 n+4 n+5 ... m-2 m-1 m
+            // n은 현재 선택한 페이지, m은 최대 페이지
+            // 1부터 3까지
+
             // 시작 인덱스를 작성합니다.
-            for(int i = 0; i < edgeBuffer; i++)
+            for (int i = startNum; i < startNum + edgeBuffer; i++)
             {
-                if(i >= (pageNum - cursorBuffer))
+                if(i >= (pageNum - cursorBuffer + 1))
                 {
                     // pageNum 근처이므로 출력하지 않습니다.
                     break;
                 }
-                Console.Write($"{i} ");
+                Console.Write($" {i}");
 
                 // (n - cursorbuffer)까지 반복한다.
             }
-            if (pageNum < 4)
+            if (pageNum - cursorBuffer + 1 > startNum + edgeBuffer)
             {
                 Console.Write(" ...");
             }
+            for(int i = Math.Max(pageNum-cursorBuffer, 0) ; i < pageNum; i++)
+            {
+
+                Console.Write($" {i + 1}");
+            }
+            Console.Write($" [{pageNum + 1}]");
+
+            for (int i = pageNum + 1; i <= Math.Min(cursorBuffer + pageNum, maxPageNum - edgeBuffer - 1); i++)
+            {
+
+                Console.Write($" {i + startNum}");
+            }
+            if(pageNum + cursorBuffer + startNum < maxPageNum - edgeBuffer)
+            {
+                Console.Write(" ...");
+            }
+            for (int i = Math.Max(pageNum + startNum, maxPageNum - edgeBuffer); i < maxPageNum; i++)
+            {
+                // pageNum이 오른쪽 끝 - 버퍼보다 더 큰 경우에는 출력하지 않습니다.
+                Console.Write($" {i + startNum}");
+            }
+
+
+            Console.WriteLine();
             Console.WriteLine("도움이 필요하시면 다음의 명령어를 입력하세요 : !명령어");
 
-            Console.WriteLine(); // 1 2 3 ... n-5 n-4 n-3 n-2 n-1 [n] n+1 n+2 n+3 n+4 n+5 ... m-2 m-1 m
-            // n은 현재 선택한 페이지, m은 최대 페이지
-            // 1부터 3까지
+            Console.WriteLine();
             // 
             
-            
+            Console.WriteLine($"maxPageNum의 값 : {maxPageNum}");
 
 
 
@@ -448,7 +481,8 @@ namespace attempt1
 
             if(parameter.Length == 0)
             {
-                NextCommand.Enqueue(new CommandCaller(ShowPageList, (++pageNum).ToString()));
+                pageNum++;
+                NextCommand.Enqueue(new CommandCaller(ShowPageList, (pageNum + 1).ToString()));
                 return;
                 // 다음 함수 사이에는 명령문 듣는 상태가 아닙니다
             }
@@ -471,15 +505,40 @@ namespace attempt1
                 Cry("들어온 인자가 null 값입니다");
             }
 
-            NextCommand.Enqueue(new CommandCaller(ShowPageList, pageNum.ToString()));
+            NextCommand.Enqueue(new CommandCaller(ShowPageList, (pageNum + 1).ToString()));
             // 다음 함수 사이에는 명령문 듣는 상태가 아닙니다.
         }// "!다음"
 #warning 테스트 하지 않은 함수입니다
-        void ShowPervList(string parameter)
+        void ShowPreviousList(string parameter)
         {
+            if (parameter.Length == 0)
+            {
+                NextCommand.Enqueue(new CommandCaller(ShowPageList, (--pageNum + 1).ToString()));
+                return;
+                // 다음 함수 사이에는 명령문 듣는 상태가 아닙니다
+            }
 
+            try
+            {
+                pageNum -= int.Parse(parameter);
+            }
+            catch (FormatException)
+            {
+                Cry("숫자를 입력해주세요. 이 명령어는 정수만 받을 수 있습니다.");
+                return;
+            }
+            catch (OverflowException)
+            {
+                Cry("입력해준 숫자가 너무 커요.");
+            }
+            catch (ArgumentNullException)
+            {
+                Cry("들어온 인자가 null 값입니다");
+            }
+
+            NextCommand.Enqueue(new CommandCaller(ShowPageList, (pageNum + 1).ToString()));
         }// "!이전"
-#warning 로직 구현 중입니다.
+#warning 테스트 지수 : 가라
         void DeleteMemo(string parameter)
         {
             // 함수 설명
@@ -493,7 +552,7 @@ namespace attempt1
                     fileInfo.Refresh();
                     if (fileInfo.Exists == false)
                     {
-                        Console.WriteLine("파일이 성공적으로 삭제되었습니다");
+                        Say("파일이 성공적으로 삭제되었습니다");
                     }
                     else
                     {
@@ -507,7 +566,7 @@ namespace attempt1
             }
             else
             {
-                Console.WriteLine("파일이 존재하지 않아 아무것도 하지 않았어요.");
+                Say("파일이 존재하지 않아 아무것도 하지 않았어요.");
             }
             UpdateFileList();
             NextCommand.Enqueue(new CommandCaller(ShowPageList));
@@ -704,7 +763,7 @@ namespace attempt1
             // 시그너쳐를 통해 명령어인지 판정한다
             if(commandLine.StartsWith(commandSigniture) == false) // 명령어가 아닌 경우
             {
-                Console.WriteLine("올바른 명령어가 아닙니다. !help 혹은 !도움 을 입력하세요");
+                Say("올바른 명령어가 아닙니다. !help 혹은 !도움 을 입력하세요");
                 return;
             }
 
@@ -787,6 +846,10 @@ namespace attempt1
         void Cry(string message, CryMode mode = CryMode.User, [CallerLineNumber] int line = 0, [CallerMemberName] string caller = "")
         {
             Console.WriteLine($"ERROR_{caller} at line {line}\t: {message}");
+        }
+        void Say(string message)
+        {
+            Console.WriteLine($"프로그램 : {message}");
         }
         #endregion
         #region 마리아나 해구 급으로 숨겨진 테스트용 함수
