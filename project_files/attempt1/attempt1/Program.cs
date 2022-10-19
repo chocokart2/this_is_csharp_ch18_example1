@@ -55,6 +55,7 @@ namespace attempt1
             noteSceneCommands.Add("뒤로", new Command(GoBackToMenu));
             noteSceneCommands.Add("메뉴", new Command(GoBackToMenu));
             noteSceneCommands.Add("메인", new Command(GoBackToMenu));
+            noteSceneCommands.Add("복붙", new Command(CopyMemo));
             noteSceneCommands.Add("저장", new Command(SaveMemoToFile));
             noteSceneCommands.Add("제목", new Command(ChangeMemoTitle));
             //noteSceneCommands.Add("!", new Command(WriteMemoNewLine));
@@ -72,7 +73,7 @@ namespace attempt1
 
         int pageNum; // 0부터 시작하는 페이지 번호입니다.
         int maxPageNum;
-        int countPerPage = 3; // 한 페이지에 보여질 메모의 갯수
+        int countPerPage = 10; // 한 페이지에 보여질 메모의 갯수
         int lastId // 새로운 메모에 아이디를 부여할 때 사용합니다.
         {
             get
@@ -377,12 +378,12 @@ namespace attempt1
                     if (pageNum < 0) pageNum = 0;
                     if (pageNum >= maxPageNum) pageNum = maxPageNum - 1;
                 }
-                catch (FormatException ex)
+                catch (FormatException)
                 {
                     Cry("숫자를 입력해주세요");
                     return;
                 }
-                catch (OverflowException ex)
+                catch (OverflowException)
                 {
                     Cry("입력한 숫자가 너무 커요");
                     return;
@@ -538,6 +539,7 @@ namespace attempt1
 
             NextCommand.Enqueue(new CommandCaller(ShowPageList, (pageNum + 1).ToString()));
         }// "!이전"
+#line hidden
 #warning 테스트 지수 : 가라
         void DeleteMemo(string parameter)
         {
@@ -697,9 +699,38 @@ namespace attempt1
             UpdateFileList();
             NextCommand.Enqueue(new CommandCaller(ShowCurrentMemoObjectContent));
         }
-        void SaveMemoWithNewName()
+#warning 테스트 안한 함수입니다.
+        void CopyMemo(string parameter)
         {
-            // >> 함수 설명
+            // 함수 설명
+            // 해당 이름을 가진 파일의 내용을 복사해와 현재 자신이 수정하고 있는 메모에 붙여넣기 합니다.
+            // 저장은 하지 않습니다.
+
+            string targetFile = $"{directoryPath}{parameter}{fileType}";
+
+            FileInfo fileInfo = new FileInfo(targetFile);
+            if (fileInfo.Exists)
+            {
+                FileStream openerStream = new FileStream(targetFile, FileMode.Open);
+                BinaryFormatter deserializer = new BinaryFormatter();
+
+                // 딥 카피
+                MemoData recvMemo = (MemoData)deserializer.Deserialize(openerStream);
+                currentOpenedMemoObject.title = recvMemo.title;
+                currentOpenedMemoObject.content = recvMemo.content;
+
+                hasMemoEdited = true;
+
+                openerStream.Close();
+            }
+            else
+            {
+                Say("미안해요, 입력한 파일을 찾을 수 없어요. 파일 이름을 제대로 입력했는지 확인해보시겠어요?");
+            }
+
+
+
+            NextCommand.Enqueue(new CommandCaller(ShowCurrentMemoObjectContent));
         }
 
         void WriteMemoNewLine(string parameter)
