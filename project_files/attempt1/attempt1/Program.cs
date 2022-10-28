@@ -40,6 +40,7 @@ namespace attempt1
             // 필드 초기화
             pageNum = 0;
             maxPageNum = 0;
+            currentOpenedDirectoryPath = "";
             memoList = new List<MemoData>();
             NextCommand = new Queue<CommandCaller>();
             mainSceneCommands = new Dictionary<string, Command>();
@@ -48,6 +49,7 @@ namespace attempt1
             mainSceneCommands.Add("응답", new Command(RespondCommand));
             mainSceneCommands.Add("이전", new Command(ShowPreviousList));
             mainSceneCommands.Add("삭제", new Command(DeleteMemo));
+            mainSceneCommands.Add("새폴더", new Command(MakeFolder));
             mainSceneCommands.Add("생성", new Command(MakeMemo));
             mainSceneCommands.Add("지우기", new Command(DeleteMemo));
             mainSceneCommands.Add("페이지", new Command(ShowPageList));
@@ -89,6 +91,7 @@ namespace attempt1
         bool workLoop = true;
         bool hasMemoEdited = false; // 만약 객체 수정이 이루어졌다고 생각되면 true로 바뀝니다.
         string currentOpenedFileName; // 확장자 포함한 이름입니다.
+        string currentOpenedDirectoryPath; // 현재 열고 있는 폴더가 무엇인가요?
         readonly string commandSigniture = "!";
         readonly string directoryPath = "memo_files\\";
         readonly string fileType = ".chokart"; // 확장자 파일입니다.
@@ -259,7 +262,7 @@ namespace attempt1
                 {
                     throw new CannotMakeAlternativeNameException("다른 이름을 선택하세요");
                 }
-                fileInfo = new FileInfo(string.Format($"{directoryPath}{Title}{fileType}"));
+                fileInfo = new FileInfo(string.Format($"{directoryPath}{currentOpenedDirectoryPath}{Title}{fileType}"));
 
                 if(fileInfo.Exists) Title = String.Format($"{Title}_"); // 대체 이름을 만듭니다.
                 whileAttempt++;
@@ -573,6 +576,44 @@ namespace attempt1
             UpdateFileList();
             NextCommand.Enqueue(new CommandCaller(ShowPageList));
         }// "!지우기 !삭제"
+#warning 로직 구현 중입니다.
+        void MakeFolder(string parameter)
+        {
+            // 함수 설명
+            // 파라메터로 받은 문자를 이름으로 하여 폴더를 하나 만듭니다.
+            // 이미 그 폴더가 있으면 이미 있다고 하고 끝냅니다.
+
+            while (parameter.EndsWith("\\"))
+            {
+                parameter = parameter.Remove(parameter.Length - 1, 1);
+            }
+
+            if(parameter.Length == 0)
+            {
+                Say("\\으로만 된 이름은 폴더로 만들 수 없어요.");
+            }
+            DirectoryInfo directory = new DirectoryInfo($"{directoryPath}{currentOpenedDirectoryPath}{parameter}\\");
+            if (directory.Exists)
+            {
+                Say("이미 해당 폴더가 이미 존재해요. 다른 이름은 없을까요?");
+                return;
+            }
+            directory.Create();
+            directory.Refresh();
+            if (directory.Exists)
+            {
+                Say("폴더가 만들어졌어요.");
+            }
+            else
+            {
+                Cry("폴더 만들기 실패!");
+            }
+        }
+        void RemoveFolder(string parameter)
+        {
+
+        }
+
         #endregion
         // 노트 커멘드
         #region ViewMode.Edit용 함수
@@ -634,6 +675,7 @@ namespace attempt1
                 currentOpenedMemoObject == null)
             {
                 Cry("현재 수정중인 메모 객체가 존재하지 않습니다.");
+                return;
             }
 
 
@@ -641,22 +683,44 @@ namespace attempt1
             // 만약 아무 입력이 없다면 지금 조작중인 객체를 저장합니다.
             if(parameter == "") // 새로운 제목으로 저장하지 않음
             {
+                // 현재 수정 중인 파일입니다.
                 targetPath = $"{directoryPath}{currentOpenedFileName}";
 
+                // 목표로하는 파일 이름입니다.
+                string newPath = $"{directoryPath}{currentOpenedMemoObject.title}{fileType}";
+
                 FileInfo fileInfo = new FileInfo(targetPath);
+
+
+
+                
 
 
                 // 제목을 바꾼 흔적이 있는지 조사
                 if (currentOpenedFileName != currentOpenedMemoObject.title)
                 {
-#warning 근데 여기 브라켓 안에 targetPath에 할당된 값은 브라켓 바깥으로 나가면 휘발될까요?
                     targetPath = $"{directoryPath}{currentOpenedMemoObject.title}{fileType}";
+
+                    // 목표로 하는 파일(수정된 파일 이름)이 이미 존재하는지 체크합니다
+                    FileInfo targetFile = new FileInfo(targetPath);
+                    while(targetFile.Exists == true)
+                    {
+                        Say($"해당 파일 이름[{currentOpenedMemoObject.title}]이 이미 존재해서 다른 이름으로 저장하는 중이에요");
+
+                        currentOpenedMemoObject.title = $"{currentOpenedMemoObject.title}_";
+                        targetPath = $"{directoryPath}{currentOpenedMemoObject.title}{fileType}";
+                        targetFile = new FileInfo(targetPath);
+                        targetFile.Refresh();
+                    }
 
                     // 제목을 바꿨으므로 MoveTo 함수를 호출합니다.
                     // 주소를 옮겼으므로 옮긴 주소로 타게팅을 다르게 합니다.
                     fileInfo.MoveTo(targetPath);
                     fileInfo = new FileInfo(targetPath);
                 }
+
+
+
 
                 FileStream fs = new FileStream(targetPath, FileMode.Open);
                 BinaryFormatter serializer = new BinaryFormatter();
@@ -907,6 +971,15 @@ namespace attempt1
         {
             User    = 0,
             Dev     = 1
+        }
+        [Flags]
+        enum SortMode : byte
+        {
+            SortedByName    = 0b_0000_0000,
+            SortedByDate    = 0b_0000_0001,
+            ReverseSort     = 0b_1000_0000 // 저 자리가 0이라면 순서대로 정렬
+
+
         }
         #endregion
 
